@@ -40,11 +40,9 @@
 
             taskInput.value = '';
 
-            // Show success message
             let message = document.getElementById('message');
             message.classList.remove('hidden');
 
-            // Hide success message after 2 seconds
             setTimeout(() => {
                 message.classList.add('hidden');
             }, 2000);
