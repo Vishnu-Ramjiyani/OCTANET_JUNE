@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>To-Do List</h1>
+        <input type="text" id="new-task" placeholder="Add a new task...">
+        <button onclick="addTask()">Add Task</button>
+        <p id="message" class="hidden">Task successfully added!</p>
+        <ul id="task-list"></ul>
+    </div>
+    <script>
+        function addTask() {
+            let taskInput = document.getElementById('new-task');
+            let taskText = taskInput.value.trim();
+
+            if (taskText === '') {
+                alert('Please enter a task.');
+                return;
+            }
+
+            let taskList = document.getElementById('task-list');
+
+            let li = document.createElement('li');
+            li.textContent = taskText;
+
+            let removeButton = document.createElement('button');
+            removeButton.textContent = 'Remove';
+            removeButton.onclick = () => {
+                taskList.removeChild(li);
+            };
+
+            li.appendChild(removeButton);
+            taskList.appendChild(li);
+
+            taskInput.value = '';
+
+            let message = document.getElementById('message');
+            message.classList.remove('hidden');
+
+            setTimeout(() => {
+                message.classList.add('hidden');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
