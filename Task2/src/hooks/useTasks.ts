@@ -50,13 +50,23 @@ export function useTasks() {
   }
 
   const updateTask = async (id: string, updates: Partial<Task>) => {
+    // Find the task to ensure we have all required fields for upsert
+    // We use upsert (POST) instead of update (PATCH) because some browser extensions
+    // block PATCH requests or URLs with query parameters like ?id=...
+    const currentTask = tasks.find(t => t.id === id)
+    if (!currentTask) {
+        console.error('Task not found for update')
+        return
+    }
+
+    const updatedTask = { ...currentTask, ...updates, updated_at: new Date().toISOString() }
+
     // Optimistic update
-    setTasks(prev => prev.map(t => (t.id === id ? { ...t, ...updates } : t)))
+    setTasks(prev => prev.map(t => (t.id === id ? updatedTask : t)))
 
     const { error } = await supabase
       .from('tasks')
-      .update(updates)
-      .eq('id', id)
+      .upsert(updatedTask)
 
     if (error) {
       // Revert if error (simple refetch)

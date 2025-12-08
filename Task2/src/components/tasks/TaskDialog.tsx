@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Calendar, Tag, AlertCircle } from 'lucide-react';
+import { X, Calendar, Tag, AlertCircle, CheckCircle } from 'lucide-react';
 import type { Task, TaskPriority, TaskStatus } from '../../types/Task';
 
 interface TaskDialogProps {
@@ -132,6 +132,31 @@ export default function TaskDialog({ isOpen, onClose, onCreate, onUpdate, task }
                                             }`}
                                     >
                                         {p}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex-1 min-w-[140px]">
+                            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1.5 uppercase tracking-wider">
+                                <CheckCircle className="w-3.5 h-3.5" /> Status
+                            </label>
+                            <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+                                {[
+                                    { value: 'todo', label: 'To Do' },
+                                    { value: 'in_progress', label: 'Doing' },
+                                    { value: 'done', label: 'Done' }
+                                ].map(s => (
+                                    <button
+                                        key={s.value}
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, status: s.value as TaskStatus })}
+                                        className={`flex-1 text-xs font-medium py-1.5 rounded-md capitalize transition-all ${formData.status === s.value
+                                            ? 'bg-white dark:bg-gray-600 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                            }`}
+                                    >
+                                        {s.label}
                                     </button>
                                 ))}
                             </div>
