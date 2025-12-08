@@ -3,15 +3,26 @@ import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
 import { Plus, Search, Filter } from 'lucide-react';
 import { useTasks } from '../hooks/useTasks';
 import TaskColumn from '../components/tasks/TaskColumn';
-import NewTaskDialog from '../components/tasks/NewTaskDialog';
+import TaskDialog from '../components/tasks/TaskDialog';
 import Navbar from '../components/Layout/Navbar';
-import type { TaskStatus } from '../types/Task';
+import type { Task, TaskStatus } from '../types/Task';
 
 export default function TaskBoard() {
     const { tasks, updateTask, deleteTask, createTask, loading } = useTasks();
-    const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
+    const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+    const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterPriority, setFilterPriority] = useState<string>('all');
+
+    const handleCreateTask = () => {
+        setEditingTask(null);
+        setIsTaskDialogOpen(true);
+    };
+
+    const handleEditTask = (task: Task) => {
+        setEditingTask(task);
+        setIsTaskDialogOpen(true);
+    };
 
     const onDragEnd = async (result: DropResult) => {
         const { destination, source, draggableId } = result;
@@ -43,49 +54,49 @@ export default function TaskBoard() {
 
     if (loading && tasks.length === 0) {
         return (
-            <div className="flex h-screen items-center justify-center bg-gray-50">
+            <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen flex flex-col bg-[#f8fafc]">
+        <div className="min-h-screen flex flex-col bg-[#f8fafc] dark:bg-gray-900 transition-colors">
             <Navbar />
 
             <main className="flex-1 p-4 sm:p-8 overflow-hidden flex flex-col max-w-[1600px] mx-auto w-full">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Board</h1>
-                        <p className="text-gray-500 mt-1">Manage your team's tasks here.</p>
+                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight transition-colors">Board</h1>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1 transition-colors">Manage your team's tasks here.</p>
                     </div>
 
                     <button
-                        onClick={() => setIsNewTaskOpen(true)}
-                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-indigo-200 transition-all hover:scale-105 active:scale-95"
+                        onClick={handleCreateTask}
+                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-indigo-200 dark:shadow-none transition-all hover:scale-105 active:scale-95"
                     >
                         <Plus className="w-5 h-5" />
                         New Task
                     </button>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-4 mb-8 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                <div className="flex flex-col sm:flex-row gap-4 mb-8 bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm transition-colors">
                     <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
                         <input
                             type="text"
                             placeholder="Search tasks..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 focus:border-indigo-500 dark:focus:border-indigo-500 outline-none transition-all"
                         />
                     </div>
                     <div className="flex items-center gap-2">
-                        <Filter className="w-5 h-5 text-gray-400" />
+                        <Filter className="w-5 h-5 text-gray-400 dark:text-gray-500" />
                         <select
                             value={filterPriority}
                             onChange={(e) => setFilterPriority(e.target.value)}
-                            className="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none"
+                            className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none transition-colors"
                         >
                             <option value="all">All Priorities</option>
                             <option value="low">Low</option>
@@ -105,6 +116,7 @@ export default function TaskBoard() {
                                         title={col.title}
                                         tasks={filteredTasks.filter(t => t.status === col.id)}
                                         onDeleteTask={deleteTask}
+                                        onEditTask={handleEditTask}
                                     />
                                 </div>
                             ))}
@@ -113,10 +125,12 @@ export default function TaskBoard() {
                 </DragDropContext>
             </main>
 
-            <NewTaskDialog
-                isOpen={isNewTaskOpen}
-                onClose={() => setIsNewTaskOpen(false)}
+            <TaskDialog
+                isOpen={isTaskDialogOpen}
+                onClose={() => setIsTaskDialogOpen(false)}
                 onCreate={createTask}
+                onUpdate={updateTask}
+                task={editingTask}
             />
         </div>
     );
