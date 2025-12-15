@@ -13,6 +13,7 @@ export default function TaskBoard() {
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterPriority, setFilterPriority] = useState<string>('all');
+    const [filterStatus, setFilterStatus] = useState<string>('all');
 
     const handleCreateTask = () => {
         setEditingTask(null);
@@ -64,7 +65,7 @@ export default function TaskBoard() {
         <div className="min-h-screen flex flex-col bg-[#f8fafc] dark:bg-gray-900 transition-colors">
             <Navbar />
 
-            <main className="flex-1 p-4 sm:p-8 overflow-hidden flex flex-col max-w-[1600px] mx-auto w-full">
+            <main className="flex-1 p-4 sm:p-8 overflow-visible lg:overflow-hidden flex flex-col max-w-[1600px] mx-auto w-full">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight transition-colors">Board</h1>
@@ -94,6 +95,16 @@ export default function TaskBoard() {
                     <div className="flex items-center gap-2">
                         <Filter className="w-5 h-5 text-gray-400 dark:text-gray-500" />
                         <select
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                            className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none transition-colors"
+                        >
+                            <option value="all">All Columns</option>
+                            <option value="todo">To Do</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="done">Completed</option>
+                        </select>
+                        <select
                             value={filterPriority}
                             onChange={(e) => setFilterPriority(e.target.value)}
                             className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none transition-colors"
@@ -107,19 +118,21 @@ export default function TaskBoard() {
                 </div>
 
                 <DragDropContext onDragEnd={onDragEnd}>
-                    <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
-                        <div className="flex gap-6 h-full min-w-[320px] lg:min-w-0 lg:grid lg:grid-cols-3">
-                            {columns.map(col => (
-                                <div key={col.id} className="h-full">
-                                    <TaskColumn
-                                        status={col.id}
-                                        title={col.title}
-                                        tasks={filteredTasks.filter(t => t.status === col.id)}
-                                        onDeleteTask={deleteTask}
-                                        onEditTask={handleEditTask}
-                                    />
-                                </div>
-                            ))}
+                    <div className="flex-1 overflow-x-hidden overflow-y-visible lg:overflow-x-auto lg:overflow-y-hidden pb-4">
+                        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 h-auto lg:h-full min-w-[320px] lg:min-w-0">
+                            {columns
+                                .filter(col => filterStatus === 'all' || col.id === filterStatus)
+                                .map(col => (
+                                    <div key={col.id} className="h-full">
+                                        <TaskColumn
+                                            status={col.id}
+                                            title={col.title}
+                                            tasks={filteredTasks.filter(t => t.status === col.id)}
+                                            onDeleteTask={deleteTask}
+                                            onEditTask={handleEditTask}
+                                        />
+                                    </div>
+                                ))}
                         </div>
                     </div>
                 </DragDropContext>
