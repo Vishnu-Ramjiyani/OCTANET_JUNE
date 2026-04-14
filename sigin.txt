@@ -1,0 +1,478 @@
+import React, {useEffect, useRef, useState} from 'react';
+import z from 'zod';
+import {useForm} from 'react-hook-form';
+import {zodResolver} from '@hookform/resolvers/zod';
+import {Link, useNavigate} from 'react-router-dom';
+import PatternBg from '@/assets/img/pattern-white.jpeg';
+import Logo from '@/assets/img/logo.png';
+import {
+  Backdrop,
+  Button,
+  CircularProgress,
+  IconButton,
+  InputAdornment,
+  TextField,
+  Typography,
+} from '@mui/material';
+import Dialog from '@/components/dialog';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import {useMutation, useQuery} from '@tanstack/react-query';
+import AuthEffect from '@/store/auth/AuthEffect';
+import {LoginApi, RoleApi} from '@/api';
+import {ErrorWidget} from '@/components/api-response';
+import {useDispatch, useSelector} from 'react-redux';
+import AuthAction from '@/store/auth/AuthAction';
+import NavigateRoutes from '@/constant/navigate-route';
+import {toast} from 'react-toastify';
+import LocalStorage from '@/store/local-storage';
+import FullscreenLoader from '@/components/fullscreen-loader';
+import {AppName} from '@/constant';
+
+export default function SignIn() {
+  const {permissions} = useSelector(state => state.auth);
+
+  const [showPassword, setShowPassword] = React.useState(false);
+
+  // States for Superadmin & OTP flow
+  const [showSuperadminChoice, setShowSuperadminChoice] = useState(false);
+  const [activeOtpModal, setActiveOtpModal] = useState(false);
+  const [tenantSelectionModal, setTenantSelectionModal] = useState(false);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const otpRefs = useRef([]);
+  const [availableTenants, setAvailableTenants] = useState([]);
+  const [postLoginData, setPostLoginData] = useState(null);
+
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    LocalStorage.clear();
+  }, []);
+
+  const queryMyProfile = useQuery({
+    queryKey: ['MyProfile'],
+    queryFn: LoginApi.myProfile,
+    enabled: false,
+    retry: 1,
+  });
+
+  const {isPending, mutate, error} = useMutation({
+    mutationKey: 'SignIn',
+    mutationFn: LoginApi.getUserDataWithT,
+    onSuccess: async d => {
+      console.log('SININ RESULT >> ', d);
+
+      const roles = d.data.roles; // Role IDs
+      setAvailableTenants(d.data.tenants);
+
+      LocalStorage.setItem(LocalStorage.keys.Token, d.data.token);
+      LocalStorage.setItem(
+        LocalStorage.keys.TenantId,
+        d.data.tenants[0].tenantKey,
+      );
+      LocalStorage.setItem(
+        LocalStorage.keys.LoggedUser,
+        JSON.stringify(d.data),
+      );
+      // LocalStorage.setItem(LocalStorage.keys.Roles, JSON.stringify(roles));
+
+      // Get Profile data
+      const r = await queryMyProfile.refetch();
+      if (r.isSuccess && r.data?.data) {
+        const profileData = r.data.data;
+        dispatch(AuthAction.saveMyProfile(profileData));
+        dispatch(AuthAction.saveUserRoles(roles));
+
+        // Superadmin flow
+        if (d.data.isSuperAdmin) {
+          setPostLoginData({allTenant: d.data.tenants});
+          setShowSuperadminChoice(true);
+          return;
+        }
+
+        dispatch(AuthAction.signin());
+        dispatch(AuthAction.saveUserRoles(roles));
+        navigate(NavigateRoutes.Dashboard, {replace: true});
+        toast.success('Signin successfully.');
+      } else {
+        toast.error(
+          'You do not have permission to access this system. Please contact the administrator.',
+        );
+        LocalStorage.clear();
+      }
+
+      // const allFetchQueries = [];
+      // roles.map(role => {
+      //   allFetchQueries.push(
+      //     queryClient.fetchQuery({
+      //       queryKey: ['LoginRole', role],
+      //       queryFn: RoleApi.getSingleRole,
+      //     }),
+      //   );
+      // });
+
+      // // const result = await queryClient.fetchQuery({
+      // //   queryKey: ['LoginRole', roles[0]],
+      // //   queryFn: RoleApi.getSingleRole,
+      // // });
+
+      // const results = await Promise.all(allFetchQueries);
+      // console.log('RESULTS >> ', results);
+
+      // const roleNames = results.map(r => r.data.name).filter(Boolean);
+      // const allPageIds = [...new Set(results.flatMap(r => r.data.pageIds))];
+      // LocalStorage.setItem(
+      //   LocalStorage.keys.RoleNames,
+      //   JSON.stringify(roleNames),
+      // );
+
+      // console.log('RESULTS roleNames >> ', roleNames);
+      // console.log('RESULTS allPageIds >> ', allPageIds);
+      // if (allPageIds.length > 0) {
+      //   LocalStorage.setItem(
+      //     LocalStorage.keys.PageIds,
+      //     JSON.stringify(allPageIds),
+      //   );
+      //   dispatch(AuthAction.signin());
+      //   dispatch(AuthAction.saveUserRoles(roles));
+      //   dispatch(AuthAction.saveUserPermissions(allPageIds));
+      //   navigate(NavigateRoutes.Dashboard, {replace: true});
+      //   toast.success('Signin successfully.');
+      // } else {
+      //   toast.error(
+      //     'You do not have permission to access this system. Please contact the administrator.',
+      //   );
+      //   LocalStorage.clear();
+      // }
+    },
+    onError: err => {
+      console.log('API ERROR >> ', err);
+    },
+  });
+
+  // Superadmin helper
+  const handleSuperadminChoice = choice => {
+    setShowSuperadminChoice(false);
+    if (!postLoginData) return;
+    const {allTenant} = postLoginData;
+
+    if (choice === 'tenant') {
+      LocalStorage.setItem('allTenant', JSON.stringify(allTenant));
+      toast.info('OTP Sent! (Demo OTP: 123456)');
+      setActiveOtpModal(true);
+    } else {
+      LocalStorage.setItem('allTenant', null);
+      if (availableTenants.length > 1) {
+        setTenantSelectionModal(true);
+      } else {
+        dispatch(AuthAction.signin());
+        navigate(NavigateRoutes.Dashboard, {replace: true});
+        toast.success('Signin successfully.');
+      }
+    }
+  };
+
+  const handleTenantSelect = tenantKey => {
+    if (!postLoginData) return;
+    LocalStorage.setItem(LocalStorage.keys.TenantId, tenantKey);
+    if (permissions.length > 1) {
+      dispatch(AuthAction.signin());
+      navigate(NavigateRoutes.Dashboard, {replace: true});
+      toast.success('Tenant selected successfully.');
+
+      // dispatch(AuthAction.signin());
+      // navigate(NavigateRoutes.Dashboard, {replace: true});
+      // toast.success('Tenant selected successfully.');
+    } else {
+      toast.error(
+        'You do not have permission to access this system. Please contact the administrator',
+      );
+    }
+    setTenantSelectionModal(false);
+  };
+
+  // OTP handlers
+  const handleOtpChange = (value, index) => {
+    if (!/^\d*$/.test(value)) return;
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
+    if (value && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+  const verifyOtp = () => {
+    const enteredOtp = otp.join('');
+    if (enteredOtp === '123456') {
+      toast.success('OTP Verified');
+      setActiveOtpModal(false);
+      dispatch(AuthAction.signin());
+      navigate(NavigateRoutes.TenantDashboard, {replace: true});
+    } else {
+      toast.error('Invalid OTP. Try again.');
+    }
+  };
+
+  const validationSchema = z.object({
+    // email: z
+    //   .string({
+    //     message: 'Email address should be required!',
+    //   })
+    //   .min(6, { message: 'Email address is required!' })
+    //   .email({
+    //     message: 'Invalid email address!',
+    //   }),
+    username: z
+      .string({message: 'Username is required'})
+      .min(4, {message: 'Username is required'}),
+    password: z
+      .string({
+        message: 'Password should be required!',
+      })
+      .min(4, {
+        message: 'Password should be required!',
+      }),
+  });
+
+  const onSubmit = data => {
+    console.log(data);
+    mutate(data);
+  };
+  const handleClickShowPassword = () => setShowPassword(show => !show);
+
+  const {
+    register,
+    handleSubmit,
+    trigger,
+    formState: {errors},
+  } = useForm({
+    defaultValues: {username: '', password: ''},
+    resolver: zodResolver(validationSchema),
+  });
+
+  return (
+    <section className="grid grid-cols-1 md:grid-cols-2 items-center h-full">
+      <FullscreenLoader
+        isLoading={isPending}
+        className="w-full min-h-screen grid place-items-center">
+        <div className="w-full">
+          <div className="text-center">
+            <Typography variant="h4" className="!font-bold mb-4">
+              Sign In
+            </Typography>
+            <Typography
+              color="textSecondary"
+              className="text-lg font-normal text-blue-gray-500">
+              Enter your email and password to Sign In.
+            </Typography>
+          </div>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="mt-8 mb-2 mx-auto w-80 max-w-screen-lg lg:w-1/2">
+            <div className="mb-1 flex flex-col gap-6">
+              <TextField
+                size="small"
+                label="Username"
+                error={errors?.username?.message}
+                helperText={errors?.username?.message}
+                {...register('username')}
+                onBlur={async () => await trigger('username')}
+              />
+              <TextField
+                size="small"
+                label="Password"
+                error={errors?.password?.message}
+                helperText={errors?.password?.message}
+                {...register('password')}
+                onBlur={async () => await trigger('password')}
+                type={showPassword ? 'text' : 'password'}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label={
+                            showPassword
+                              ? 'hide the password'
+                              : 'display the password'
+                          }
+                          onClick={handleClickShowPassword}
+                          // onMouseDown={handleMouseDownPassword}
+                          // onMouseUp={handleMouseUpPassword}
+                          edge="end">
+                          {showPassword ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </div>
+            <ErrorWidget error={error} />
+            <Button
+              className="mt-6"
+              fullWidth
+              type="submit"
+              size="large"
+              variant="contained">
+              Sign In
+            </Button>
+            <div className="flex items-center justify-between gap-2 mt-6">
+              <div />
+              <Typography
+                variant="small"
+                className="font-semibold text-gray-900">
+                <a href="#">Forgot Password?</a>
+              </Typography>
+            </div>
+            <div className="space-y-4 mt-8">
+              <Button
+                size="large"
+                variant="text"
+                className="flex items-center gap-x-2 justify-center shadow-md"
+                fullWidth>
+                <svg
+                  width="17"
+                  height="16"
+                  viewBox="0 0 17 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg">
+                  <g clipPath="url(#clip0_1156_824)">
+                    <path
+                      d="M16.3442 8.18429C16.3442 7.64047 16.3001 7.09371 16.206 6.55872H8.66016V9.63937H12.9813C12.802 10.6329 12.2258 11.5119 11.3822 12.0704V14.0693H13.9602C15.4741 12.6759 16.3442 10.6182 16.3442 8.18429Z"
+                      fill="#4285F4"
+                    />
+                    <path
+                      d="M8.65974 16.0006C10.8174 16.0006 12.637 15.2922 13.9627 14.0693L11.3847 12.0704C10.6675 12.5584 9.7415 12.8347 8.66268 12.8347C6.5756 12.8347 4.80598 11.4266 4.17104 9.53357H1.51074V11.5942C2.86882 14.2956 5.63494 16.0006 8.65974 16.0006Z"
+                      fill="#34A853"
+                    />
+                    <path
+                      d="M4.16852 9.53356C3.83341 8.53999 3.83341 7.46411 4.16852 6.47054V4.40991H1.51116C0.376489 6.67043 0.376489 9.33367 1.51116 11.5942L4.16852 9.53356Z"
+                      fill="#FBBC04"
+                    />
+                    <path
+                      d="M8.65974 3.16644C9.80029 3.1488 10.9026 3.57798 11.7286 4.36578L14.0127 2.08174C12.5664 0.72367 10.6469 -0.0229773 8.65974 0.000539111C5.63494 0.000539111 2.86882 1.70548 1.51074 4.40987L4.1681 6.4705C4.8001 4.57449 6.57266 3.16644 8.65974 3.16644Z"
+                      fill="#EA4335"
+                    />
+                  </g>
+                  <defs>
+                    <clipPath id="clip0_1156_824">
+                      <rect
+                        width="16"
+                        height="16"
+                        fill="white"
+                        transform="translate(0.5)"
+                      />
+                    </clipPath>
+                  </defs>
+                </svg>
+                Sign in With Google
+              </Button>
+            </div>
+            <Typography
+              className="text-center !text-blue-gray-500 !font-medium mt-4"
+              color="textSecondary">
+              Not registered?
+              <Link
+                href="/auth/signup/"
+                className="text-gray-900 ml-1 font-semibold">
+                Create account
+              </Link>
+            </Typography>
+          </form>
+        </div>
+      </FullscreenLoader>
+
+      {/* Superadmin Choice Modal */}
+      <Dialog
+        open={showSuperadminChoice}
+        onClose={() => setShowSuperadminChoice(false)}
+        title="Superadmin Access"
+        showFooterButtons={false}>
+        <Typography>
+          👋 Welcome, Superadmin! Choose how you want to proceed:
+        </Typography>
+        <div className="flex justify-end gap-3 mt-4">
+          <Button
+            onClick={() => handleSuperadminChoice('tenant')}
+            variant="contained"
+            color="success">
+            Tenant Management
+          </Button>
+          <Button
+            onClick={() => handleSuperadminChoice('login')}
+            variant="contained"
+            color="info">
+            Continue to Dashboard
+          </Button>
+        </div>
+      </Dialog>
+
+      {/* OTP Modal */}
+      <Dialog
+        open={activeOtpModal}
+        onClose={() => setActiveOtpModal(false)}
+        title="OTP Verification"
+        cancelBtnText="Close"
+        submitBtnText="Verify OTP"
+        onSubmitBtn={verifyOtp}
+        disabled={otp.includes('')}>
+        <Typography>
+          Please enter the 6-digit OTP sent to your email:
+        </Typography>
+        <div className="flex justify-center gap-3 mt-4">
+          {otp.map((digit, index) => (
+            <TextField
+              key={index}
+              inputRef={el => (otpRefs.current[index] = el)}
+              value={digit}
+              onChange={e => handleOtpChange(e.target.value, index)}
+              inputProps={{
+                maxLength: 1,
+                style: {textAlign: 'center', fontSize: '20px'},
+              }}
+              size="small"
+              sx={{width: 48, '& input': {textAlign: 'center'}}}
+            />
+          ))}
+        </div>
+      </Dialog>
+
+      {/* Tenant Selection Modal */}
+      <Dialog
+        open={tenantSelectionModal}
+        onClose={() => setTenantSelectionModal(false)}
+        title="Select Tenant"
+        showFooterButtons={false}>
+        <Typography>
+          You have access to multiple tenants. Please select one:
+        </Typography>
+        <div className="flex flex-col gap-2 mt-4">
+          {availableTenants.map(t => (
+            <Button
+              key={t.tenantKey}
+              fullWidth
+              onClick={() => handleTenantSelect(t.tenantKey)}>
+              {t.tenantName || t.tenantKey}
+            </Button>
+          ))}
+        </div>
+      </Dialog>
+
+      <div className="p-8 hidden md:block relative h-full">
+        <div className="absolute flex flex-col justify-center items-center top-0 bottom-0 left-0 right-0">
+          <img src={Logo} alt="image" className="h-38 w-38" />
+          <Typography variant="h3" color="textPrimary" className="font-bold">
+            {AppName}
+          </Typography>
+        </div>
+        <img
+          src={PatternBg}
+          alt="image"
+          className="object-cover object-center h-full max-h-[calc(100vh-4rem)] w-full rounded-2xl"
+        />
+      </div>
+    </section>
+  );
+}
